@@ -149,6 +149,7 @@ has_upload_permission = {"Employee": "erpnext.setup.doctype.employee.employee.ha
 # Override standard doctype classes
 
 override_doctype_class = {
+	"Account": "hrms.overrides.account.CustomAccount",
 	"Employee": "hrms.overrides.employee_master.EmployeeMaster",
 	"Timesheet": "hrms.overrides.employee_timesheet.EmployeeTimesheet",
 	"Payment Entry": "hrms.overrides.employee_payment_entry.EmployeePaymentEntry",

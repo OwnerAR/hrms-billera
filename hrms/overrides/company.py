@@ -117,6 +117,10 @@ def set_default_hr_accounts(doc, method=None):
 
 
 def validate_default_accounts(doc, method=None):
+	"""Validate default accounts and fix duplicate account numbers if any"""
+	# Fix duplicate account numbers before validation (especially for Indonesia COA)
+	fix_duplicate_account_numbers(doc)
+	
 	if doc.default_payroll_payable_account:
 		for_company = frappe.db.get_value("Account", doc.default_payroll_payable_account, "company")
 		if for_company != doc.name:
@@ -132,6 +136,46 @@ def validate_default_accounts(doc, method=None):
 					"The currency of {0} should be same as the company's default currency. Please select another account."
 				).format(frappe.bold(_("Default Payroll Payable Account")))
 			)
+
+
+def fix_duplicate_account_numbers(doc):
+	"""
+	Fix duplicate account numbers in Chart of Accounts
+	This is a workaround for known issue with Indonesia COA template
+	"""
+	try:
+		# Find accounts with duplicate account numbers for this company
+		duplicate_query = """
+			SELECT account_number, COUNT(*) as count
+			FROM `tabAccount`
+			WHERE company = %s AND account_number IS NOT NULL AND account_number != ''
+			GROUP BY account_number
+			HAVING count > 1
+		"""
+		duplicates = frappe.db.sql(duplicate_query, (doc.name,), as_dict=True)
+		
+		if duplicates:
+			for dup in duplicates:
+				account_number = dup.account_number
+				# Get all accounts with this duplicate number
+				accounts = frappe.db.sql("""
+					SELECT name, account_name, account_number
+					FROM `tabAccount`
+					WHERE company = %s AND account_number = %s
+					ORDER BY creation
+				""", (doc.name, account_number), as_dict=True)
+				
+				# Keep the first one, clear account_number for the rest
+				for idx, account in enumerate(accounts):
+					if idx > 0:  # Skip first account
+						frappe.db.set_value("Account", account.name, "account_number", None, update_modified=False)
+						frappe.logger().warning(
+							f"Cleared duplicate account number {account_number} from account {account.name} ({account.account_name})"
+						)
+	except Exception as e:
+		# Log but don't fail - this is a best-effort fix
+		frappe.logger().error(f"Error fixing duplicate account numbers: {str(e)}")
+		pass
 
 
 def handle_linked_docs(doc, method=None):
